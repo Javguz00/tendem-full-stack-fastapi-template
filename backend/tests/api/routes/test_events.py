@@ -69,7 +69,7 @@ def test_read_event_as_participant(
 ) -> None:
     from tests.utils.user import create_random_user
     from tests.utils.utils import user_authentication_headers
-    from app.crud import add_participants_to_event_sync
+    from app.crud import add_participants_to_event
     
     # Create a participant user and get their token
     participant_user = create_random_user(db)
@@ -81,7 +81,7 @@ def test_read_event_as_participant(
     event = create_random_event(db)
     
     # Add the participant user to the event
-    add_participants_to_event_sync(session=db, db_event=event, participant_ids=[participant_user.id])
+    add_participants_to_event(session=db, db_event=event, participant_ids=[participant_user.id])
     
     # Now the participant should be able to read the event
     response = client.get(
@@ -133,7 +133,7 @@ def test_read_events_normal_user(
 ) -> None:
     from tests.utils.user import create_random_user
     from tests.utils.utils import user_authentication_headers
-    from app.crud import add_participants_to_event_sync
+    from app.crud import add_participants_to_event
     
     # Get the normal user
     normal_user = create_random_user(db)
@@ -148,7 +148,7 @@ def test_read_events_normal_user(
     # 2. Event where normal user is participant
     other_user = create_random_user(db)
     participant_event = create_random_event(db, owner_id=other_user.id)
-    add_participants_to_event_sync(session=db, db_event=participant_event, participant_ids=[normal_user.id])
+    add_participants_to_event(session=db, db_event=participant_event, participant_ids=[normal_user.id])
     
     # 3. Event not related to normal user (should not be visible)
     create_random_event(db, owner_id=other_user.id)
@@ -341,13 +341,13 @@ def test_remove_participant(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
     from tests.utils.user import create_random_user
-    from app.crud import add_participants_to_event_sync
+    from app.crud import add_participants_to_event
     
     event = create_random_event(db)
     user = create_random_user(db)
     
     # Add participant first
-    add_participants_to_event_sync(session=db, db_event=event, participant_ids=[user.id])
+    add_participants_to_event(session=db, db_event=event, participant_ids=[user.id])
     
     # Remove participant
     response = client.delete(
