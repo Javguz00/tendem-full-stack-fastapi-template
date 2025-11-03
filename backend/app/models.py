@@ -7,26 +7,6 @@ from sqlalchemy import ForeignKey
 from sqlalchemy.types import DateTime as SADateTime
 
 
-# EventParticipant junction table (defined early for link_model reference)
-class EventParticipant(SQLModel, table=True):
-    __tablename__ = "event_participant"
-
-    event_id: uuid.UUID = Field(
-        sa_column=Column(
-            ForeignKey("event.id", ondelete="CASCADE"),
-            nullable=False,
-            primary_key=True,
-        )
-    )
-    user_id: uuid.UUID = Field(
-        sa_column=Column(
-            ForeignKey("user.id", ondelete="CASCADE"),
-            nullable=False,
-            primary_key=True,
-        )
-    )
-
-
 # Shared properties
 class UserBase(SQLModel):
     email: EmailStr = Field(unique=True, index=True, max_length=255)
@@ -60,6 +40,26 @@ class UserUpdateMe(SQLModel):
 class UpdatePassword(SQLModel):
     current_password: str = Field(min_length=8, max_length=128)
     new_password: str = Field(min_length=8, max_length=128)
+
+
+# EventParticipant junction table (defined before User to avoid forward reference issues)
+class EventParticipant(SQLModel, table=True):
+    __tablename__ = "event_participant"
+
+    event_id: uuid.UUID = Field(
+        sa_column=Column(
+            ForeignKey("event.id", ondelete="CASCADE"),
+            nullable=False,
+            primary_key=True,
+        )
+    )
+    user_id: uuid.UUID = Field(
+        sa_column=Column(
+            ForeignKey("user.id", ondelete="CASCADE"),
+            nullable=False,
+            primary_key=True,
+        )
+    )
 
 
 # Database model, database table inferred from class name
@@ -104,7 +104,10 @@ class ItemUpdate(ItemBase):
 class Item(ItemBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     owner_id: uuid.UUID = Field(
-        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+        sa_column=Column(
+            ForeignKey("user.id", ondelete="CASCADE"),
+            nullable=False,
+        )
     )
     owner: User | None = Relationship(back_populates="items")
 
