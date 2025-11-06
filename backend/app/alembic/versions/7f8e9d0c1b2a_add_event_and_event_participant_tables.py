@@ -7,6 +7,7 @@ Create Date: 2024-01-01 12:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '7f8e9d0c1b2a'
@@ -16,22 +17,27 @@ depends_on = None
 
 
 def upgrade():
+    # Ensure pgcrypto exists in case server defaults use gen_random_uuid()
+    # (safe on Postgres; no-op on others when migration runs in dialect-guarded code).
+    op.execute('CREATE EXTENSION IF NOT EXISTS "pgcrypto";')
+
     # Create event table
     op.create_table('event',
-        sa.Column('id', sa.String(36), primary_key=True),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column('title', sa.String(length=255), nullable=False),
         sa.Column('description', sa.String(length=255), nullable=True),
-        sa.Column('event_time', sa.DateTime(), nullable=False),
-        sa.Column('created_at', sa.DateTime(), nullable=False),
-        sa.Column('owner_id', sa.String(36), nullable=False),
+        # Use timezone-aware datetimes to match SQLModel definitions
+        sa.Column('event_time', sa.DateTime(timezone=True), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+        sa.Column('owner_id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.ForeignKeyConstraint(['owner_id'], ['user.id'], ondelete='CASCADE')
     )
     op.create_index(op.f('ix_event_owner_id'), 'event', ['owner_id'], unique=False)
 
     # Create event_participant junction table
     op.create_table('event_participant',
-        sa.Column('event_id', sa.String(36), nullable=False),
-        sa.Column('user_id', sa.String(36), nullable=False),
+        sa.Column('event_id', postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column('user_id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.ForeignKeyConstraint(['event_id'], ['event.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['user_id'], ['user.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('event_id', 'user_id')
