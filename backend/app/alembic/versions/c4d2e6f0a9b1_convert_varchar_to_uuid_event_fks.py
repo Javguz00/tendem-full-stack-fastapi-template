@@ -74,51 +74,19 @@ def upgrade():
     # 0) Ensure pgcrypto exists (used for gen_random_uuid) — change to uuid-ossp if preferred.
     op.execute('CREATE EXTENSION IF NOT EXISTS "pgcrypto";')
 
-    # 1) Validate that existing values look like UUIDs. If any invalid
-    # values are found we abort the migration to avoid corrupting data.
-    validate_checks = [
-        ("event", "id"),
-        ("event", "owner_id"),
-        ("event_participant", "id"),
-        ("event_participant", "event_id"),
-        ("event_participant", "user_id"),
-    ]
-
-    uuid_regex = r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-
-    for table, column in validate_checks:
-        op.execute(
-            f"""
-            DO $$
-            DECLARE bad_count INTEGER;
-            BEGIN
-              SELECT COUNT(*) INTO bad_count FROM {table} WHERE {column} IS NOT NULL AND {column} !~ '{uuid_regex}';
-              IF bad_count > 0 THEN
-                RAISE EXCEPTION 'Migration aborted: % rows in {table}.{column} are not valid UUID strings', bad_count;
-              END IF;
-            END$$;
-            """
-        )
-
-    # 2) Drop foreign key constraints that will interfere with type changes.
-    op.execute(_drop_fk_constraints_for('event_participant', 'event_id'))
-    op.execute(_drop_fk_constraints_for('event_participant', 'user_id'))
-    op.execute(_drop_fk_constraints_for('event', 'owner_id'))
-
-    # 3) Alter column types to uuid using a safe cast. We alter primary keys
-    # and FK columns listed above. The USING ...::uuid cast assumes the
-    # textual values are valid UUID strings (we validated earlier).
-    op.execute("ALTER TABLE event ALTER COLUMN id TYPE uuid USING id::uuid;")
-    op.execute("ALTER TABLE event ALTER COLUMN owner_id TYPE uuid USING owner_id::uuid;")
-
-    op.execute("ALTER TABLE event_participant ALTER COLUMN id TYPE uuid USING id::uuid;")
-    op.execute("ALTER TABLE event_participant ALTER COLUMN event_id TYPE uuid USING event_id::uuid;")
-    op.execute("ALTER TABLE event_participant ALTER COLUMN user_id TYPE uuid USING user_id::uuid;")
-
-    # 4) Recreate basic foreign key constraints with ON DELETE CASCADE.
-    op.execute("ALTER TABLE event_participant ADD FOREIGN KEY (event_id) REFERENCES event(id) ON DELETE CASCADE;")
-    op.execute("ALTER TABLE event_participant ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;")
-    op.execute("ALTER TABLE event ADD FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE;")
+    # NOTE: The event and event_participant tables were created with UUID types
+    # from the start in migration 7f8e9d0c1b2a, so there's nothing to convert.
+    # This migration is a no-op for those tables. If you have OTHER tables that
+    # were created with varchar UUID columns, add their conversion logic here.
+    
+    # Example: If user/item tables needed conversion from varchar to UUID, you would:
+    # 1) Validate existing varchar values are valid UUIDs
+    # 2) Drop FK constraints
+    # 3) ALTER COLUMN ... TYPE uuid USING column::uuid
+    # 4) Recreate FK constraints
+    
+    # Since event/event_participant are already UUID, no action needed.
+    print("Event and event_participant tables already use native UUID types. No conversion needed.")
 
 
 def downgrade():
@@ -129,18 +97,5 @@ def downgrade():
         print("Skipping UUID conversion downgrade: not running on PostgreSQL (dialect=%s)" % bind.dialect.name)
         return
 
-    # Downgrade will attempt to cast uuid columns back to varchar(36).
-    op.execute(_drop_fk_constraints_for('event_participant', 'event_id'))
-    op.execute(_drop_fk_constraints_for('event_participant', 'user_id'))
-    op.execute(_drop_fk_constraints_for('event', 'owner_id'))
-
-    op.execute("ALTER TABLE event_participant ALTER COLUMN user_id TYPE varchar(36) USING user_id::text;")
-    op.execute("ALTER TABLE event_participant ALTER COLUMN event_id TYPE varchar(36) USING event_id::text;")
-    op.execute("ALTER TABLE event_participant ALTER COLUMN id TYPE varchar(36) USING id::text;")
-
-    op.execute("ALTER TABLE event ALTER COLUMN owner_id TYPE varchar(36) USING owner_id::text;")
-    op.execute("ALTER TABLE event ALTER COLUMN id TYPE varchar(36) USING id::text;")
-
-    op.execute("ALTER TABLE event_participant ADD FOREIGN KEY (event_id) REFERENCES event(id) ON DELETE CASCADE;")
-    op.execute("ALTER TABLE event_participant ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;")
-    op.execute("ALTER TABLE event ADD FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE;")
+    # Event/event_participant were created as UUID from the start, so downgrade is a no-op.
+    print("Event and event_participant tables were created with UUID types. No downgrade needed.")
